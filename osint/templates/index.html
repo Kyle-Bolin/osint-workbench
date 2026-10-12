@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OSINT Workbench</title>
+  <style>
+    :root { --bg:#fafafa; --fg:#1a1a1a; --muted:#666; --card:#fff; --line:#e3e3e3; --accent:#2b6cb0; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#111; --fg:#eee; --muted:#999; --card:#1b1b1b; --line:#333; --accent:#63a4ff; } }
+    body { font: 15px/1.5 system-ui, sans-serif; background:var(--bg); color:var(--fg); max-width:960px; margin:0 auto; padding:24px 16px; }
+    form { display:flex; gap:8px; margin-bottom:24px; }
+    input { flex:1; padding:10px; font-size:16px; border:1px solid var(--line); border-radius:6px; background:var(--card); color:var(--fg); }
+    button { padding:10px 18px; font-size:16px; border:0; border-radius:6px; background:var(--accent); color:#fff; cursor:pointer; }
+    section { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:16px; margin-bottom:16px; overflow-x:auto; }
+    h2 { margin:0 0 8px; font-size:17px; }
+    table { width:100%; border-collapse:collapse; font-size:14px; }
+    td, th { text-align:left; padding:6px 8px; border-top:1px solid var(--line); vertical-align:top; word-break:break-word; }
+    th { color:var(--muted); font-weight:500; }
+    .err { color:#c53030; }
+    .muted { color:var(--muted); }
+  </style>
+</head>
+<body>
+  <h1>OSINT Workbench</h1>
+  <form method="get">
+    <input name="domain" placeholder="example.com" value="{{ domain }}" autofocus>
+    <button>Investigate</button>
+  </form>
+  {% if error %}<p class="err">{{ error }}</p>{% endif %}
+  {% if result %}
+    {% for name, mod in result.modules.items() %}
+    <section>
+      <h2>{{ name }} <span class="muted">({{ mod.claims|length }})</span></h2>
+      {% if mod.error %}<p class="err">{{ mod.error }}</p>{% endif %}
+      {% if mod.claims %}
+      <table>
+        <tr><th>Predicate</th><th>Value</th><th>Confidence</th><th>Why</th></tr>
+        {% for c in mod.claims %}
+        <tr>
+          <td>{{ c.predicate }}</td>
+          <td>{% if c.evidence_url %}<a href="{{ c.evidence_url }}" target="_blank" rel="noopener">{{ c.object }}</a>{% else %}{{ c.object }}{% endif %}</td>
+          <td>{{ c.confidence }}</td>
+          <td class="muted">{{ c.rationale }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% elif not mod.error %}<p class="muted">Nothing found.</p>{% endif %}
+    </section>
+    {% endfor %}
+  {% endif %}
+</body>
+</html>
