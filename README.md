@@ -20,6 +20,47 @@ uvicorn osint.app:app --reload
 Open http://127.0.0.1:8000 and try `example.com`.
 JSON API: `http://127.0.0.1:8000/api/lookup?domain=example.com`
 
+## Use it from Claude (MCP server)
+
+`osint/mcp_server.py` exposes each lookup as an MCP tool, so Claude Code or
+Claude Desktop can investigate a domain with this code. Claude starts the
+server itself; you only register it once. Use full paths, because Claude may
+launch it from another folder.
+
+**Claude Code**, from the repo root with the venv set up:
+
+```bash
+claude mcp add osint-workbench -e PYTHONPATH="$PWD" -- "$PWD/.venv/bin/python" -m osint.mcp_server
+```
+
+**Claude Desktop**: add this to `claude_desktop_config.json` (Settings >
+Developer > Edit Config) and restart the app:
+
+```json
+{
+  "mcpServers": {
+    "osint-workbench": {
+      "command": "/full/path/to/osint-workbench/.venv/bin/python",
+      "args": ["-m", "osint.mcp_server"],
+      "env": {"PYTHONPATH": "/full/path/to/osint-workbench"}
+    }
+  }
+}
+```
+
+On Windows the Python path is `.venv\Scripts\python.exe`. Then ask Claude
+something like "investigate example.com with the osint-workbench tools".
+
+| Tool | Module function |
+|---|---|
+| `dns_records` | `lookup_dns` |
+| `rdap_registration` | `lookup_rdap` |
+| `ct_subdomains` | `lookup_subdomains` |
+
+Claims that come back through MCP have `found_by: "ai"`; their confidence is
+still set by the module's rules. To poke at the tools without Claude, the MCP
+Inspector works too: `npx @modelcontextprotocol/inspector .venv/bin/python -m osint.mcp_server`.
+
 ## Tests
 
 ```bash
@@ -35,9 +76,10 @@ pytest
 | `osint/modules/rdap.py` | Registrar, dates, nameservers, status via rdap.org |
 | `osint/modules/crtsh.py` | Subdomains from crt.sh |
 | `osint/app.py` | FastAPI app: runs modules in parallel, renders the page |
+| `osint/mcp_server.py` | MCP server: the same modules as tools for Claude |
 
 Each module is a plain function `lookup_x(domain) -> list[Claim]` with no web
-code in it, so it can later be exposed as an MCP tool for an AI agent unchanged.
+code in it, so the web app and the MCP server both call it unchanged.
 
 ## Roadmap
 
@@ -50,7 +92,7 @@ code in it, so it can later be exposed as an MCP tool for an AI agent unchanged.
 7. Pivot graph
 8. Case notebook (SQLite)
 9. Broker-data self-lookup
-10. MCP server so Claude can run the modules and add scored claims
+10. MCP server so Claude can ~~run the modules~~ and add scored claims (needs the case notebook)
 
 ## Use it responsibly
 
