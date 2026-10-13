@@ -44,7 +44,7 @@ pytest
 | `osint/modules/geoip.py` | Rough IP location from ipinfo.io |
 | `osint/app.py` | FastAPI app: runs modules in parallel, renders the page |
 
-Each module is a plain function `lookup_x(domain or ip) -> list[Claim]` with no web
+Each module is a plain function `lookup_x(domain) -> list[Claim]` with no web
 code in it, so it can later be exposed as an MCP tool for an AI agent unchanged.
 
 ## Roadmap
