@@ -2,7 +2,9 @@
 
 A personal, learn-by-building OSINT tool. Type a domain and see its DNS records,
 registration data (RDAP, the modern WHOIS), and subdomains from certificate
-transparency logs, all on one page.
+transparency logs, all on one page. Type an IP address, or click one in a
+domain's DNS results, to see its reverse DNS, the network (AS) that announces it,
+who the address block is registered to, and a rough location.
 
 Every result is stored as a **claim**: `subject -predicate-> object` with a
 source, a confidence score, and a short rationale. That shape is what the later
@@ -17,8 +19,12 @@ pip install -r requirements.txt
 uvicorn osint.app:app --reload
 ```
 
-Open http://127.0.0.1:8000 and try `example.com`.
-JSON API: `http://127.0.0.1:8000/api/lookup?domain=example.com`
+Open http://127.0.0.1:8000 and try `example.com` or `8.8.8.8`.
+JSON API: `http://127.0.0.1:8000/api/lookup?q=example.com` (or `?q=8.8.8.8`)
+
+Optional: IP geolocation uses ipinfo.io, which works without an account at a low
+rate limit. For more, make a free token at https://ipinfo.io/signup and
+`export IPINFO_TOKEN=...` before starting the app. Keep it out of git.
 
 ## Tests
 
@@ -31,12 +37,14 @@ pytest
 | Path | What it is |
 |---|---|
 | `osint/claims.py` | The `Claim` dataclass, base confidence rules, and `combine()` for corroboration |
-| `osint/modules/dns_lookup.py` | A, AAAA, MX, NS, TXT, CNAME via dnspython |
-| `osint/modules/rdap.py` | Registrar, dates, nameservers, status via rdap.org |
+| `osint/modules/dns_lookup.py` | A, AAAA, MX, NS, TXT, CNAME via dnspython; reverse DNS (PTR) for an IP |
+| `osint/modules/rdap.py` | Registrar, dates, nameservers, status via rdap.org; network owner and range for an IP |
 | `osint/modules/crtsh.py` | Subdomains from crt.sh |
+| `osint/modules/asn.py` | Origin AS and routed prefix for an IP, via Team Cymru's DNS service |
+| `osint/modules/geoip.py` | Rough IP location from ipinfo.io |
 | `osint/app.py` | FastAPI app: runs modules in parallel, renders the page |
 
-Each module is a plain function `lookup_x(domain) -> list[Claim]` with no web
+Each module is a plain function `lookup_x(domain or ip) -> list[Claim]` with no web
 code in it, so it can later be exposed as an MCP tool for an AI agent unchanged.
 
 ## Roadmap
@@ -46,7 +54,7 @@ code in it, so it can later be exposed as an MCP tool for an AI agent unchanged.
 3. Image metadata (EXIF + map)
 4. Username check across sites
 5. Wayback Machine history
-6. IP / infrastructure lookups
+6. ~~IP / infrastructure lookups~~ (Shodan still to add)
 7. Pivot graph
 8. Case notebook (SQLite)
 9. Broker-data self-lookup

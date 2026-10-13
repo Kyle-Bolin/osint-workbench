@@ -65,8 +65,8 @@ def test_api_reports_module_errors_without_failing(monkeypatch):
 
     monkeypatch.setattr(app_module, "MODULES", {"dns": ok, "rdap": boom})
     client = TestClient(app_module.app)
-    body = client.get("/api/lookup", params={"domain": "example.com"}).json()
+    body = client.get("/api/lookup", params={"q": "example.com"}).json()
     assert body["modules"]["dns"]["claims"][0]["object"] == "93.184.216.34"
     assert "upstream down" in body["modules"]["rdap"]["error"]
-    assert client.get("/api/lookup", params={"domain": "not a domain"}).status_code == 400
-    assert client.get("/", params={"domain": "example.com"}).status_code == 200
+    assert client.get("/api/lookup", params={"q": "not a domain"}).status_code == 400
+    assert client.get("/", params={"q": "example.com"}).status_code == 200
