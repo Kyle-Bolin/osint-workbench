@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Cases · OSINT Workbench{% endblock %}
+{% block content %}
+  <h1>Cases</h1>
+  <p class="muted">A case keeps every lookup you run while it's selected, plus your notes, and exports as Markdown.</p>
+  <form method="post" action="/cases">
+    <input name="name" placeholder="New case, e.g. Audit of my domain" required>
+    <input name="description" placeholder="What it's about (optional)">
+    <button>Create and select</button>
+  </form>
+  {% if cases %}
+  <section>
+    <table>
+      <tr><th>Case</th><th>Opened</th><th>Lookups</th><th>Notes</th><th></th></tr>
+      {% for case in cases %}
+      <tr>
+        <td><a href="/cases/{{ case.id }}">{{ case.name }}</a>{% if case.description %}<br><span class="muted">{{ case.description }}</span>{% endif %}</td>
+        <td>{{ case.created_at|when }}</td>
+        <td>{{ case.lookup_count }}</td>
+        <td>{{ case.note_count }}</td>
+        <td>
+          {%- if current_case and current_case.id == case.id %}<span class="muted">selected</span>
+          {%- else %}<form class="inline" method="post" action="/cases/{{ case.id }}/select"><button class="link">select</button></form>
+          {%- endif -%}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </section>
+  {% else %}
+  <p class="muted">No cases yet.</p>
+  {% endif %}
+{% endblock %}

@@ -14,6 +14,8 @@ Run it: python -m osint.mcp_server   (see "Use it from Claude" in the README)
 import json
 import logging
 import re
+import sqlite3
+from contextlib import closing
 from dataclasses import dataclass, replace
 from typing import Callable
 
@@ -23,6 +25,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
+from osint import notebook
 from osint.claims import Claim
 from osint.modules.crtsh import lookup_subdomains
 from osint.modules.dns_lookup import lookup_dns
@@ -106,6 +109,106 @@ def ct_subdomains(domain: str) -> LookupResult:
     every name that has appeared on a public TLS certificate. Can take up to
     30 seconds, and crt.sh is sometimes overloaded, so retry once on errors."""
     return run_lookup(lookup_subdomains, domain)
+
+
+# --- Case notebook --------------------------------------------------------
+# The same cases as the web app's Cases page (osint/notebook.py), so Claude
+# and you work in one notebook. The tools that write to it aren't marked
+# read-only, but they only ever add rows (nothing here edits or deletes),
+# which is what destructive_hint=False tells the client.
+
+NOTEBOOK_READ = ToolAnnotations(read_only_hint=True, open_world_hint=False)
+NOTEBOOK_WRITE = ToolAnnotations(read_only_hint=False, destructive_hint=False, open_world_hint=False)
+# save_lookup_to_case does both: a lookup on the internet, then a notebook write.
+LOOKUP_AND_SAVE = ToolAnnotations(read_only_hint=False, destructive_hint=False, open_world_hint=True)
+
+# Lookup tools whose results can be saved into a case: tool name -> (the
+# module name the web app uses, so a case's lookup log reads the same either
+# way, and the tool function). A new lookup tool gets a line here too.
+CASE_LOOKUPS = {
+    "dns_records": ("dns", dns_records),
+    "rdap_registration": ("rdap", rdap_registration),
+    "ct_subdomains": ("subdomains", ct_subdomains),
+}
+
+
+@dataclass
+class CaseInfo:
+    id: int
+    name: str
+    description: str
+    created_at: str
+    lookup_count: int = 0
+    note_count: int = 0
+
+
+def require_case(db: sqlite3.Connection, case_id: int) -> dict:
+    case = notebook.get_case(db, case_id)
+    if case is None:
+        raise ToolError(f"No case with id {case_id}; list_cases shows the ones that exist")
+    return case
+
+
+@server.tool(annotations=NOTEBOOK_READ)
+def list_cases() -> list[CaseInfo]:
+    """List the investigations (cases) in the workbench's notebook, newest
+    first, with how many lookups and notes each holds. Use it to find the
+    case_id the other case tools need."""
+    with closing(notebook.connect()) as db:
+        return [CaseInfo(**case) for case in notebook.list_cases(db)]
+
+
+@server.tool(annotations=NOTEBOOK_WRITE)
+def create_case(name: str, description: str = "") -> CaseInfo:
+    """Start a new case: a notebook for one investigation that keeps every
+    saved lookup's claims (with when and by whom) and notes. The owner sees
+    it on the web app's Cases page and can export it as Markdown."""
+    if not name.strip():
+        raise ToolError("A case needs a name")
+    with closing(notebook.connect()) as db:
+        case_id = notebook.create_case(db, name, description)
+        return CaseInfo(**notebook.get_case(db, case_id))
+
+
+@server.tool(annotations=NOTEBOOK_READ)
+def read_case(case_id: int) -> str:
+    """Read a whole case as Markdown: its notes, its claims grouped by
+    subject (repeats folded together, with first and last seen), and the log
+    of lookups run in it. Read it before adding to a case you didn't start."""
+    with closing(notebook.connect()) as db:
+        require_case(db, case_id)
+        return notebook.export_markdown(db, case_id)
+
+
+@server.tool(annotations=NOTEBOOK_WRITE)
+def add_case_note(case_id: int, note: str) -> str:
+    """Add a note to a case: what you noticed, what you concluded and why,
+    or what to check next. Notes are marked as written by the AI. Put
+    findings in claims (via save_lookup_to_case), not in notes; notes are
+    for reasoning, and you never set a confidence score yourself."""
+    if not note.strip():
+        raise ToolError("The note is empty")
+    with closing(notebook.connect()) as db:
+        require_case(db, case_id)
+        notebook.add_note(db, case_id, note, written_by="ai")
+    return f"Note added to case {case_id}"
+
+
+@server.tool(annotations=LOOKUP_AND_SAVE)
+def save_lookup_to_case(case_id: int, lookup: str, target: str) -> LookupResult:
+    """Run one lookup tool and save its claims into a case. When you're
+    working a case, use this instead of calling the lookup tool directly, so
+    the results stay with the investigation. `lookup` is the lookup tool's
+    name (dns_records, rdap_registration or ct_subdomains) and `target` is
+    what that tool takes. Returns the same claims the lookup tool would."""
+    if lookup not in CASE_LOOKUPS:
+        raise ToolError(f"Unknown lookup {lookup!r}; use one of: {', '.join(CASE_LOOKUPS)}")
+    module, tool = CASE_LOOKUPS[lookup]
+    with closing(notebook.connect()) as db:
+        require_case(db, case_id)  # before the lookup, so a typo doesn't waste a slow call
+        result = tool(target)  # a failed lookup raises ToolError and saves nothing
+        notebook.record_lookup(db, case_id, module, result.domain, result.claims, run_by="ai")
+    return result
 
 
 if __name__ == "__main__":
