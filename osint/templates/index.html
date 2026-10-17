@@ -18,14 +18,28 @@
     th { color:var(--muted); font-weight:500; }
     .err { color:#c53030; }
     .muted { color:var(--muted); }
+    details.import { margin:-12px 0 24px; }
+    details.import form { flex-wrap:wrap; margin:8px 0 0; }
+    details.import input[type=file] { flex:1 1 100%; }
   </style>
 </head>
 <body>
   <h1>OSINT Workbench</h1>
   <form method="get">
-    <input name="q" placeholder="example.com or 8.8.8.8" value="{{ q }}" autofocus>
+    <input name="q" placeholder="example.com, 8.8.8.8 or github:octocat" value="{{ q }}" autofocus>
     <button>Investigate</button>
   </form>
+  <details class="import">
+    <summary>Map your own LinkedIn or X network from a data export</summary>
+    <p class="muted">LinkedIn: Settings &gt; Data privacy &gt; Get a copy of your data. X: Settings &gt; Your account &gt;
+      Download an archive of your data. Upload the zip, or just <code>Connections.csv</code> /
+      <code>follower.js</code>, <code>following.js</code> and <code>account.js</code>. Nothing is saved.</p>
+    <form method="post" action="/import" enctype="multipart/form-data">
+      <input type="file" name="files" multiple required>
+      <input name="linkedin_profile" placeholder="Your LinkedIn profile URL (optional)">
+      <button>Import</button>
+    </form>
+  </details>
   {% if error %}<p class="err">{{ error }}</p>{% endif %}
   {% if result %}
     {% for name, mod in result.modules.items() %}
@@ -39,7 +53,7 @@
         <tr>
           <td>{% if c.subject != result.target %}<span class="muted">{{ c.subject }}</span> {% endif %}{{ c.predicate }}</td>
           <td>
-            {%- if c.predicate in ip_predicates %}<a href="/?q={{ c.object|urlencode }}" title="Look up this IP">{{ c.object }}</a>
+            {%- if c.predicate in pivot_predicates and can_look_up(c.object) %}<a href="/?q={{ c.object|urlencode }}" title="Look this up">{{ c.object }}</a>
             {%- elif c.evidence_url %}<a href="{{ c.evidence_url }}" target="_blank" rel="noopener">{{ c.object }}</a>
             {%- else %}{{ c.object }}{% endif -%}
           </td>
