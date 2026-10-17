@@ -9,12 +9,14 @@ from fastapi.templating import Jinja2Templates
 from osint.modules.crtsh import lookup_subdomains
 from osint.modules.dns_lookup import lookup_dns
 from osint.modules.rdap import lookup_rdap
+from osint.modules.wayback import lookup_wayback
 
 app = FastAPI(title="OSINT Workbench")
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
 DOMAIN_RE = re.compile(r"^(?=.{1,253}$)([a-z0-9-]{1,63}\.)+[a-z]{2,63}$")
-MODULES = {"dns": lookup_dns, "rdap": lookup_rdap, "subdomains": lookup_subdomains}
+MODULES = {"dns": lookup_dns, "rdap": lookup_rdap, "subdomains": lookup_subdomains,
+           "wayback": lookup_wayback}
 
 
 def clean_domain(raw: str) -> str:

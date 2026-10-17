@@ -34,7 +34,7 @@ def list_tools(server_or_params):
 
 def test_one_read_only_tool_per_module():
     tools = {t.name: t for t in list_tools(mcp_server.server)}
-    assert set(tools) == {"dns_records", "rdap_registration", "ct_subdomains"}
+    assert set(tools) == {"dns_records", "rdap_registration", "ct_subdomains", "wayback_history"}
     for tool in tools.values():
         assert tool.annotations.read_only_hint
         assert "claims" in tool.output_schema["properties"]
@@ -74,4 +74,6 @@ def test_server_starts_over_stdio():
     params = StdioServerParameters(
         command=sys.executable, args=["-m", "osint.mcp_server"], cwd=REPO_ROOT,
     )
-    assert {t.name for t in list_tools(params)} == {"dns_records", "rdap_registration", "ct_subdomains"}
+    assert {t.name for t in list_tools(params)} == {
+        "dns_records", "rdap_registration", "ct_subdomains", "wayback_history",
+    }
