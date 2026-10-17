@@ -26,6 +26,23 @@ Optional: IP geolocation uses ipinfo.io, which works without an account at a low
 rate limit. For more, make a free token at https://ipinfo.io/signup and
 `export IPINFO_TOKEN=...` before starting the app. Keep it out of git.
 
+## Case notebook
+
+Open **Cases** at the top of the page and create one, such as "Audit of my
+domain". It becomes the *current case*: every lookup you run from then on,
+including IPs you click through to, is saved into it until you click **stop**.
+The case page shows:
+
+- the saved claims, grouped by subject. A fact that several lookups returned is
+  listed once, with when it was first and last seen;
+- your notes;
+- the lookup log: every module run, who ran it, and any error;
+- an **export Markdown** link that downloads the whole case as a report.
+
+Everything lives in one SQLite file, `osint.db` at the repo root, which git
+ignores. Set `OSINT_DB=/path/to/other.db` to use a different notebook, or delete
+the file to start over.
+
 ## Use it from Claude (MCP server)
 
 `osint/mcp_server.py` exposes each lookup as an MCP tool, so Claude Code or
@@ -62,10 +79,18 @@ something like "investigate example.com with the osint-workbench tools".
 | `dns_records` | `lookup_dns` |
 | `rdap_registration` | `lookup_rdap` |
 | `ct_subdomains` | `lookup_subdomains` |
+| `list_cases`, `create_case`, `read_case`, `add_case_note` | The case notebook (`osint/notebook.py`) |
+| `save_lookup_to_case` | Runs one of the lookup tools above and saves its claims into a case |
 
 Claims that come back through MCP have `found_by: "ai"`; their confidence is
 still set by the module's rules. To poke at the tools without Claude, the MCP
 Inspector works too: `npx @modelcontextprotocol/inspector .venv/bin/python -m osint.mcp_server`.
+
+The case tools use the same notebook as the Cases page, so you can ask Claude
+to "start a case for example.com and save what you find", then read the case in
+the browser. Lookups Claude saved show `ai` in the "Run by" column, and its
+notes are marked as written by ai. Claude can't write claims of its own, only
+save what a lookup returned, so every score still comes from the rules.
 
 ## Tests
 
@@ -85,6 +110,7 @@ pytest
 | `osint/modules/geoip.py` | Rough IP location from ipinfo.io |
 | `osint/app.py` | FastAPI app: runs modules in parallel, renders the page |
 | `osint/mcp_server.py` | MCP server: the same modules as tools for Claude |
+| `osint/notebook.py` | The case notebook: cases, saved claims and notes in SQLite, and Markdown export |
 
 Each module is a plain function `lookup_x(domain) -> list[Claim]` with no web
 code in it, so the web app and the MCP server both call it unchanged.
@@ -98,9 +124,9 @@ code in it, so the web app and the MCP server both call it unchanged.
 5. Wayback Machine history
 6. ~~IP / infrastructure lookups~~ (Shodan still to add)
 7. Pivot graph
-8. Case notebook (SQLite)
+8. ~~Case notebook (SQLite)~~
 9. Broker-data self-lookup
-10. MCP server so Claude can ~~run the modules~~ and add scored claims (needs the case notebook)
+10. MCP server so Claude can ~~run the modules and save scored claims into a case~~ (its own inferred claims, with the brief's AI score caps, still to come)
 
 ## Use it responsibly
 

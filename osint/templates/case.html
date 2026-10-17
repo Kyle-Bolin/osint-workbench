@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}{{ case.name }} · OSINT Workbench{% endblock %}
+{% block content %}
+  <h1>{{ case.name }}</h1>
+  <p class="muted">
+    Case {{ case.id }}, opened {{ case.created_at|when }} ·
+    {% if current_case and current_case.id == case.id %}new lookups are saved here
+    {%- else %}<form class="inline" method="post" action="/cases/{{ case.id }}/select"><button class="link">save new lookups here</button></form>
+    {%- endif %} ·
+    <a href="/cases/{{ case.id }}/export.md">export Markdown</a>
+  </p>
+  {% if case.description %}<p>{{ case.description }}</p>{% endif %}
+
+  <section>
+    <h2>Notes <span class="muted">({{ notes|length }})</span></h2>
+    {% for note in notes %}
+    <div class="note">
+      <span class="muted">{{ note.created_at|when }}{% if note.written_by == "ai" %} · written by ai{% endif %}</span>
+      <p>{{ note.body }}</p>
+    </div>
+    {% endfor %}
+    <form method="post" action="/cases/{{ case.id }}/notes">
+      <textarea name="body" placeholder="What did you notice? What should you check next?" required></textarea>
+      <button>Add note</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>Claims <span class="muted">({{ claims|length }})</span></h2>
+    {% if claims %}
+    <table class="wide">
+      <tr><th>Predicate</th><th>Value</th><th>Confidence</th><th>Why</th><th>Source</th><th>Found by</th><th>Seen</th></tr>
+      {% for subject, facts in claims|groupby("subject") %}
+      <tr><th colspan="7" class="subject">{{ subject }}</th></tr>
+      {% for c in facts %}
+      <tr>
+        <td>{{ c.predicate }}</td>
+        <td>
+          {%- if c.predicate in ip_predicates %}<a href="/?q={{ c.object|urlencode }}" title="Look up this IP">{{ c.object }}</a>
+          {%- elif c.evidence_url %}<a href="{{ c.evidence_url }}" target="_blank" rel="noopener">{{ c.object }}</a>
+          {%- else %}{{ c.object }}{% endif -%}
+        </td>
+        <td>{{ c.confidence }}</td>
+        <td class="muted">{{ c.rationale }}</td>
+        <td>{{ c.source }}</td>
+        <td>{{ c.found_by }}</td>
+        <td class="muted">{{ c.first_seen|when }}{% if c.last_seen != c.first_seen %} to {{ c.last_seen|when }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+      {% endfor %}
+    </table>
+    {% else %}
+    <p class="muted">Nothing saved yet. Select this case, then run a lookup.</p>
+    {% endif %}
+  </section>
+
+  <section>
+    <details>
+      <summary>Lookup log <span class="muted">({{ lookups|length }})</span></summary>
+      {% if lookups %}
+      <table class="wide">
+        <tr><th>When</th><th>Module</th><th>Target</th><th>Run by</th><th>Claims</th><th>Error</th></tr>
+        {% for l in lookups|reverse %}
+        <tr>
+          <td>{{ l.ran_at|when }}</td>
+          <td>{{ l.module }}</td>
+          <td>{{ l.target }}</td>
+          <td>{{ l.run_by }}</td>
+          <td>{{ l.claim_count }}</td>
+          <td class="err">{{ l.error or "" }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <p class="muted">No lookups yet.</p>
+      {% endif %}
+    </details>
+  </section>
+{% endblock %}

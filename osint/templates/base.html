@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}OSINT Workbench{% endblock %}</title>
+  <style>
+    :root { --bg:#fafafa; --fg:#1a1a1a; --muted:#666; --card:#fff; --line:#e3e3e3; --accent:#2b6cb0; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#111; --fg:#eee; --muted:#999; --card:#1b1b1b; --line:#333; --accent:#63a4ff; } }
+    body { font: 15px/1.5 system-ui, sans-serif; background:var(--bg); color:var(--fg); max-width:960px; margin:0 auto; padding:24px 16px; }
+    a { color:var(--accent); }
+    form { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:24px; }
+    input, textarea { flex:1; min-width:12em; padding:10px; font:inherit; font-size:16px; border:1px solid var(--line); border-radius:6px; background:var(--card); color:var(--fg); }
+    textarea { flex-basis:100%; min-height:5em; }
+    button { padding:10px 18px; font-size:16px; border:0; border-radius:6px; background:var(--accent); color:#fff; cursor:pointer; }
+    section { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:16px; margin-bottom:16px; overflow-x:auto; }
+    h2, summary { margin:0 0 8px; font-size:17px; font-weight:600; }
+    summary { cursor:pointer; }
+    table { width:100%; border-collapse:collapse; font-size:14px; }
+    td, th { text-align:left; padding:6px 8px; border-top:1px solid var(--line); vertical-align:top; word-break:break-word; }
+    th { color:var(--muted); font-weight:500; }
+    th.subject { color:var(--fg); font-weight:600; padding-top:14px; }
+    /* Many-column tables scroll sideways on a phone instead of squeezing every word. */
+    table.wide { min-width:720px; }
+    .err { color:#c53030; }
+    .muted { color:var(--muted); }
+    /* Small forms that sit inside a line of text, with a button that looks like a link. */
+    form.inline { display:inline; margin:0; }
+    button.link { padding:0; font-size:inherit; background:none; color:var(--accent); text-decoration:underline; }
+    nav { display:flex; flex-wrap:wrap; gap:16px; align-items:baseline; margin-bottom:16px; font-size:14px; }
+    nav .current { margin-left:auto; color:var(--muted); }
+    .note { border-top:1px solid var(--line); padding:8px 0; }
+    .note p { margin:4px 0 0; white-space:pre-wrap; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/">Lookup</a>
+    <a href="/cases">Cases</a>
+    {% if current_case %}
+    <span class="current">Saving lookups to <a href="/cases/{{ current_case.id }}">{{ current_case.name }}</a>
+      · <form class="inline" method="post" action="/cases/deselect"><button class="link">stop</button></form></span>
+    {% endif %}
+  </nav>
+{% block content %}{% endblock %}
+</body>
+</html>
