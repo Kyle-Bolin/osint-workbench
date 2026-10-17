@@ -23,7 +23,7 @@
 <body>
   <h1>OSINT Workbench</h1>
   <form method="get">
-    <input name="domain" placeholder="example.com" value="{{ domain }}" autofocus>
+    <input name="q" placeholder="example.com or 8.8.8.8" value="{{ q }}" autofocus>
     <button>Investigate</button>
   </form>
   {% if error %}<p class="err">{{ error }}</p>{% endif %}
@@ -37,8 +37,12 @@
         <tr><th>Predicate</th><th>Value</th><th>Confidence</th><th>Why</th></tr>
         {% for c in mod.claims %}
         <tr>
-          <td>{{ c.predicate }}</td>
-          <td>{% if c.evidence_url %}<a href="{{ c.evidence_url }}" target="_blank" rel="noopener">{{ c.object }}</a>{% else %}{{ c.object }}{% endif %}</td>
+          <td>{% if c.subject != result.target %}<span class="muted">{{ c.subject }}</span> {% endif %}{{ c.predicate }}</td>
+          <td>
+            {%- if c.predicate in ip_predicates %}<a href="/?q={{ c.object|urlencode }}" title="Look up this IP">{{ c.object }}</a>
+            {%- elif c.evidence_url %}<a href="{{ c.evidence_url }}" target="_blank" rel="noopener">{{ c.object }}</a>
+            {%- else %}{{ c.object }}{% endif -%}
+          </td>
           <td>{{ c.confidence }}</td>
           <td class="muted">{{ c.rationale }}</td>
         </tr>
