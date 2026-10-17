@@ -52,6 +52,6 @@ def test_page_shows_timeline_with_gaps(monkeypatch):
         return parse_cdx(domain, CDX_SAMPLE)
 
     monkeypatch.setattr(app_module, "MODULES", {"wayback": fake_wayback})
-    html = TestClient(app_module.app).get("/", params={"domain": "example.com"}).text
+    html = TestClient(app_module.app).get("/", params={"q": "example.com"}).text
     assert 'href="https://web.archive.org/web/20030202104805/http://www.example.com/"' in html
     assert "20 yr gap" in html  # nothing archived from 2004 to 2023
