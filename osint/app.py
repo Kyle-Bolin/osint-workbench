@@ -1,9 +1,12 @@
+import csv
 import ipaddress
+import json
 import re
+import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
@@ -12,6 +15,7 @@ from osint.modules.asn import lookup_asn
 from osint.modules.bluesky import lookup_bluesky_network
 from osint.modules.crtsh import lookup_subdomains
 from osint.modules.dns_lookup import lookup_dns, lookup_reverse_dns
+from osint.modules.exports import read_exports
 from osint.modules.geoip import lookup_geo
 from osint.modules.github import lookup_github_network
 from osint.modules.mastodon import lookup_mastodon_network
@@ -96,14 +100,40 @@ def api_lookup(q: str) -> dict:
     return investigate(target, kind)
 
 
+def page_context(q: str = "") -> dict:
+    return {"q": q, "result": None, "error": None,
+            "pivot_predicates": PIVOT_PREDICATES, "can_look_up": can_look_up}
+
+
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, q: str = ""):
-    context = {"q": q, "result": None, "error": None,
-               "pivot_predicates": PIVOT_PREDICATES, "can_look_up": can_look_up}
+    context = page_context(q)
     if q:
         try:
             target, kind = clean_target(q)
             context["result"] = investigate(target, kind)
         except HTTPException as exc:
             context["error"] = exc.detail
+    return templates.TemplateResponse(request, "index.html", context)
+
+
+# What a broken or wrong upload raises: shown on the page instead of a 500.
+BAD_UPLOAD = (ValueError, KeyError, IndexError, csv.Error, json.JSONDecodeError, zipfile.BadZipFile)
+
+
+@app.post("/import", response_class=HTMLResponse)
+def import_exports(request: Request, files: list[UploadFile] = File(...), linkedin_profile: str = Form("")):
+    """Your LinkedIn or X data export in, `connected_to` / `follows` claims out.
+    Uploads are read in memory and not kept: saving waits for the case notebook."""
+    context = page_context()
+    try:
+        # UploadFile.file is a temp file on disk for big uploads; read_exports reads it in place.
+        claims = read_exports({f.filename or "": f.file for f in files}, linkedin_profile)
+    except BAD_UPLOAD as exc:
+        context["error"] = f"Couldn't read that upload: {type(exc).__name__}: {exc}"
+        return templates.TemplateResponse(request, "index.html", context)
+    modules = {}
+    for claim in claims:  # one section per export, like one per module for a lookup
+        modules.setdefault(claim.source, {"claims": [], "error": None})["claims"].append(claim.to_dict())
+    context["result"] = {"target": None, "kind": "import", "modules": modules}
     return templates.TemplateResponse(request, "index.html", context)

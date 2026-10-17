@@ -37,6 +37,7 @@ def test_one_read_only_tool_per_module():
     assert set(tools) == {
         "dns_records", "rdap_registration", "ct_subdomains",
         "bluesky_network", "github_network", "mastodon_network", "x_network",
+        "read_network_export",
     }
     for tool in tools.values():
         assert tool.annotations.read_only_hint
@@ -102,4 +103,5 @@ def test_server_starts_over_stdio():
     assert {t.name for t in list_tools(params)} == {
         "dns_records", "rdap_registration", "ct_subdomains",
         "bluesky_network", "github_network", "mastodon_network", "x_network",
+        "read_network_export",
     }

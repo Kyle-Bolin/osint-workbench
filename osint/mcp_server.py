@@ -11,10 +11,13 @@ becomes the output schema.
 
 Run it: python -m osint.mcp_server   (see "Use it from Claude" in the README)
 """
+import csv
 import json
 import logging
 import re
+import zipfile
 from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Callable
 
 import dns.exception
@@ -28,6 +31,7 @@ from osint.claims import Claim
 from osint.modules.bluesky import lookup_bluesky_network
 from osint.modules.crtsh import lookup_subdomains
 from osint.modules.dns_lookup import lookup_dns
+from osint.modules.exports import read_exports
 from osint.modules.github import lookup_github_network
 from osint.modules.mastodon import lookup_mastodon_network
 from osint.modules.rdap import lookup_rdap
@@ -47,7 +51,8 @@ The *_network tools map a social account's follows and followers. Only run
 them on the owner's own accounts (or an organisation or CTF account), never
 on accounts that turn up in a follow list: mapping stays one hop out.
 x_network costs real money per account read, so only call it when the owner
-asks for X specifically.
+asks for X specifically. For LinkedIn, and for X without paying, use
+read_network_export on a data export the owner downloaded.
 """
 
 server = MCPServer("osint-workbench", instructions=INSTRUCTIONS)
@@ -165,6 +170,28 @@ def x_network(username: str) -> LookupResult:
     $0.01 per account read, so up to about $2 per call. Only use it when the
     owner asks for X. Fails without X_BEARER_TOKEN, before anything is charged."""
     return run_lookup(lookup_x_network, username, handle_cleaner(accounts.clean_x))
+
+
+@server.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False))
+def read_network_export(path: str, linkedin_profile: str = "") -> LookupResult:
+    """Map the owner's own network from a data export file on this computer:
+    LinkedIn's Connections.csv (connections, with company and position), or
+    an X archive's follower.js / following.js / account.js, or the export zip
+    itself. `path` is the full path to that file. `linkedin_profile` is the
+    owner's LinkedIn URL, since Connections.csv doesn't name its owner. Free,
+    and makes no network requests. Use it for LinkedIn, which has no API."""
+    file = Path(path).expanduser()
+    # Only export files: this tool must not become a way to read any file on disk.
+    if not (file.suffix.lower() in (".zip", ".js") or file.name.lower() == "connections.csv"):
+        raise ToolError("Give the path to Connections.csv, follower.js, following.js, account.js or the export zip")
+    try:
+        with file.open("rb") as handle:
+            claims = read_exports({file.name: handle}, linkedin_profile)
+    except (OSError, ValueError, KeyError, IndexError, csv.Error, json.JSONDecodeError, zipfile.BadZipFile) as exc:
+        raise ToolError(f"{type(exc).__name__}: {exc}") from exc
+    claims = [replace(c, found_by="ai") for c in claims]
+    log.info("read_network_export(%r) -> %d claims", file.name, len(claims))
+    return LookupResult(target=file.name, claims=claims)
 
 
 if __name__ == "__main__":

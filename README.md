@@ -7,7 +7,8 @@ domain's DNS results, to see its reverse DNS, the network (AS) that announces it
 who the address block is registered to, and a rough location. Type a social
 account (`github:octocat`, `bluesky:kyle.dev`, `@kyle@infosec.exchange`,
 `x:kyle_b`) to map who it follows, who follows it, and the other accounts and
-sites its profile links to.
+sites its profile links to. Or upload your own LinkedIn or X data export to map
+your connections there.
 
 Every result is stored as a **claim**: `subject -predicate-> object` with a
 source, a confidence score, and a short rationale. That shape is what the later
@@ -40,9 +41,22 @@ rate limit. For more, make a free token at https://ipinfo.io/signup and
 
 Each lookup reads up to 200 accounts per list (X: `X_MAX_ACCOUNTS`, default
 100, so at most about $2 per lookup). Set a spending limit in the X console
-too. Why no LinkedIn: its API doesn't offer connections to individual
-developers and its terms forbid scraping, so LinkedIn will come in as an
-import of your own data export instead (and the same for your X archive).
+too.
+
+LinkedIn works differently: its API doesn't offer connections to individual
+developers and its terms forbid scraping. So for LinkedIn, and for X without
+paying, upload your own data export under "Map your own LinkedIn or X network"
+on the page:
+
+- **LinkedIn:** Settings > Data privacy > Get a copy of your data. Upload the
+  zip or `Connections.csv` from it, plus your profile URL so the connections
+  hang off your own node.
+- **X:** Settings > Your account > Download an archive of your data. Upload the
+  zip, or `data/follower.js`, `data/following.js` and `data/account.js`. The
+  archive only has account IDs, so the accounts show up as `x:id:<number>`.
+
+Emails in the exports are skipped, and nothing is saved yet (that waits for the
+case notebook).
 
 ## Use it from Claude (MCP server)
 
@@ -84,6 +98,7 @@ something like "investigate example.com with the osint-workbench tools".
 | `github_network` | `lookup_github_network` |
 | `mastodon_network` | `lookup_mastodon_network` |
 | `x_network` | `lookup_x_network` (paid) |
+| `read_network_export` | `read_exports` (a LinkedIn or X export file on your computer) |
 
 Claims that come back through MCP have `found_by: "ai"`; their confidence is
 still set by the module's rules. To poke at the tools without Claude, the MCP
@@ -110,6 +125,7 @@ pytest
 | `osint/modules/github.py` | GitHub follows and followers, and the accounts a profile links to |
 | `osint/modules/mastodon.py` | Mastodon follows and followers, with `rel="me"` verified links |
 | `osint/modules/x_api.py` | X follows and followers through the paid API, capped per lookup |
+| `osint/modules/exports.py` | Your LinkedIn connections and X follows from your own data exports |
 | `osint/app.py` | FastAPI app: runs modules in parallel, renders the page |
 | `osint/mcp_server.py` | MCP server: the same modules as tools for Claude |
 
@@ -128,7 +144,7 @@ code in it, so the web app and the MCP server both call it unchanged.
 8. Case notebook (SQLite)
 9. Broker-data self-lookup
 10. MCP server so Claude can ~~run the modules~~ and add scored claims (needs the case notebook)
-11. Social network mapping: ~~Bluesky, GitHub, Mastodon, X API~~; LinkedIn and X archive imports next
+11. ~~Social network mapping~~ (Bluesky, GitHub, Mastodon, X API, and LinkedIn / X data exports)
 
 ## Use it responsibly
 
