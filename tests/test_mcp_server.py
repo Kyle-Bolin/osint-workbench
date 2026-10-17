@@ -34,7 +34,10 @@ def list_tools(server_or_params):
 
 def test_one_read_only_tool_per_module():
     tools = {t.name: t for t in list_tools(mcp_server.server)}
-    assert set(tools) == {"dns_records", "rdap_registration", "ct_subdomains"}
+    assert set(tools) == {
+        "dns_records", "rdap_registration", "ct_subdomains",
+        "bluesky_network", "github_network", "mastodon_network", "x_network",
+    }
     for tool in tools.values():
         assert tool.annotations.read_only_hint
         assert "claims" in tool.output_schema["properties"]
@@ -47,11 +50,33 @@ def test_tool_returns_claims_found_by_ai_with_rule_based_confidence(monkeypatch)
     monkeypatch.setattr(mcp_server, "lookup_dns", fake_dns)
     result = call("dns_records", {"domain": "https://www.Example.com/path"})
     assert not result.is_error
-    assert result.structured_content["domain"] == "example.com"
+    assert result.structured_content["target"] == "example.com"
     claim = result.structured_content["claims"][0]
     assert claim["object"] == "93.184.216.34"
     assert claim["found_by"] == "ai"
     assert claim["confidence"] == 0.95
+
+
+def test_network_tools_clean_the_handle_and_mark_claims_as_ai(monkeypatch):
+    def fake_mastodon(address):
+        return [Claim("mastodon:" + address, "follows", "mastodon:bob@mastodon.social", "mastodon", 0.95)]
+
+    monkeypatch.setattr(mcp_server, "lookup_mastodon_network", fake_mastodon)
+    result = call("mastodon_network", {"address": "@Kyle@infosec.exchange"})
+    assert not result.is_error
+    assert result.structured_content["target"] == "kyle@infosec.exchange"
+    assert result.structured_content["claims"][0]["found_by"] == "ai"
+
+    result = call("mastodon_network", {"address": "kyle"})
+    assert result.is_error
+    assert "Not a Mastodon address" in result.content[0].text
+
+
+def test_x_tool_without_a_key_says_so_and_spends_nothing(monkeypatch):
+    monkeypatch.delenv("X_BEARER_TOKEN", raising=False)
+    result = call("x_network", {"username": "kyle_b"})
+    assert result.is_error
+    assert "X_BEARER_TOKEN" in result.content[0].text
 
 
 def test_bad_input_and_upstream_failures_come_back_as_readable_errors(monkeypatch):
@@ -74,4 +99,7 @@ def test_server_starts_over_stdio():
     params = StdioServerParameters(
         command=sys.executable, args=["-m", "osint.mcp_server"], cwd=REPO_ROOT,
     )
-    assert {t.name for t in list_tools(params)} == {"dns_records", "rdap_registration", "ct_subdomains"}
+    assert {t.name for t in list_tools(params)} == {
+        "dns_records", "rdap_registration", "ct_subdomains",
+        "bluesky_network", "github_network", "mastodon_network", "x_network",
+    }

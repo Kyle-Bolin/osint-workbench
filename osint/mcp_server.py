@@ -23,10 +23,15 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
+from osint import accounts
 from osint.claims import Claim
+from osint.modules.bluesky import lookup_bluesky_network
 from osint.modules.crtsh import lookup_subdomains
 from osint.modules.dns_lookup import lookup_dns
+from osint.modules.github import lookup_github_network
+from osint.modules.mastodon import lookup_mastodon_network
 from osint.modules.rdap import lookup_rdap
+from osint.modules.x_api import MissingAPIKey, lookup_x_network
 
 log = logging.getLogger(__name__)
 
@@ -37,6 +42,12 @@ Lookups from a personal OSINT workbench. Every tool returns claims
 confidence score set by the workbench's own rules. Explain a score if it
 helps, but never invent or change one. Only investigate the owner's own
 domains, CTF targets, and bug-bounty programs that allow recon.
+
+The *_network tools map a social account's follows and followers. Only run
+them on the owner's own accounts (or an organisation or CTF account), never
+on accounts that turn up in a follow list: mapping stays one hop out.
+x_network costs real money per account read, so only call it when the owner
+asks for X specifically.
 """
 
 server = MCPServer("osint-workbench", instructions=INSTRUCTIONS)
@@ -53,12 +64,12 @@ DOMAIN_RE = re.compile(r"^(?=.{1,253}$)([a-z0-9-]{1,63}\.)+[a-z]{2,63}$")
 # Failures we expect from upstream services (timeouts, HTTP errors, a garbled
 # crt.sh response). Claude gets the message so it can retry or move on. Anything
 # else is a bug: the SDK logs its traceback and Claude only sees "Error executing tool".
-UPSTREAM_ERRORS = (httpx.HTTPError, dns.exception.DNSException, json.JSONDecodeError)
+UPSTREAM_ERRORS = (httpx.HTTPError, dns.exception.DNSException, json.JSONDecodeError, MissingAPIKey)
 
 
 @dataclass
 class LookupResult:
-    domain: str          # the cleaned domain that was actually looked up
+    target: str          # the cleaned domain, IP or handle that was actually looked up
     claims: list[Claim]
 
 
@@ -70,18 +81,30 @@ def clean_domain(raw: str) -> str:
     return domain
 
 
-def run_lookup(lookup: Callable[[str], list[Claim]], raw_domain: str) -> LookupResult:
-    domain = clean_domain(raw_domain)
+def handle_cleaner(clean: Callable[[str], str]) -> Callable[[str], str]:
+    """The account cleaners in osint/accounts.py raise ValueError; Claude needs a ToolError."""
+    def cleaned(raw: str) -> str:
+        try:
+            return clean(raw)
+        except ValueError as exc:
+            raise ToolError(str(exc)) from None
+    return cleaned
+
+
+def run_lookup(
+    lookup: Callable[[str], list[Claim]], raw: str, clean: Callable[[str], str] = clean_domain,
+) -> LookupResult:
+    target = clean(raw)
     try:
-        claims = lookup(domain)
+        claims = lookup(target)
     except UPSTREAM_ERRORS as exc:
         raise ToolError(f"{type(exc).__name__}: {exc}") from exc
     # Provenance: the AI ran this lookup. The confidence is untouched, because
     # it comes from the module's source rules, not from who asked.
     claims = [replace(c, found_by="ai") for c in claims]
     # Logged to stderr so every AI tool call can be traced later.
-    log.info("%s(%r) -> %d claims", lookup.__name__, domain, len(claims))
-    return LookupResult(domain=domain, claims=claims)
+    log.info("%s(%r) -> %d claims", lookup.__name__, target, len(claims))
+    return LookupResult(target=target, claims=claims)
 
 
 @server.tool(annotations=READ_ONLY)
@@ -106,6 +129,42 @@ def ct_subdomains(domain: str) -> LookupResult:
     every name that has appeared on a public TLS certificate. Can take up to
     30 seconds, and crt.sh is sometimes overloaded, so retry once on errors."""
     return run_lookup(lookup_subdomains, domain)
+
+
+@server.tool(annotations=READ_ONLY)
+def bluesky_network(handle: str) -> LookupResult:
+    """Map a Bluesky account: profile, who it follows and who follows it (up
+    to 200 of each), as `follows` claims between `bluesky:handle` nodes. A
+    handle that is a domain (not *.bsky.social) comes back as a
+    verified_domain claim, which links it to that domain's lookups. Free."""
+    return run_lookup(lookup_bluesky_network, handle, handle_cleaner(accounts.clean_bluesky))
+
+
+@server.tool(annotations=READ_ONLY)
+def github_network(username: str) -> LookupResult:
+    """Map a GitHub user: profile, the website and social accounts they list
+    (weak claims, since nothing checks them), who they follow and who follows
+    them (up to 200 of each). Free; GitHub allows about 10 of these an hour
+    without a GITHUB_TOKEN."""
+    return run_lookup(lookup_github_network, username, handle_cleaner(accounts.clean_github))
+
+
+@server.tool(annotations=READ_ONLY)
+def mastodon_network(address: str) -> LookupResult:
+    """Map a Mastodon account, given as user@server (like kyle@infosec.exchange):
+    profile, links (verified ones are checked by the server with rel="me"),
+    who it follows and who follows it (up to 200 of each). Free. Lists are
+    empty if the account hides them."""
+    return run_lookup(lookup_mastodon_network, address, handle_cleaner(accounts.clean_mastodon))
+
+
+@server.tool(annotations=READ_ONLY)
+def x_network(username: str) -> LookupResult:
+    """Map an X (Twitter) account: profile, who it follows and who follows it,
+    capped at X_MAX_ACCOUNTS of each (default 100). Uses X's PAID API: about
+    $0.01 per account read, so up to about $2 per call. Only use it when the
+    owner asks for X. Fails without X_BEARER_TOKEN, before anything is charged."""
+    return run_lookup(lookup_x_network, username, handle_cleaner(accounts.clean_x))
 
 
 if __name__ == "__main__":
