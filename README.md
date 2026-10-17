@@ -62,6 +62,7 @@ something like "investigate example.com with the osint-workbench tools".
 | `dns_records` | `lookup_dns` |
 | `rdap_registration` | `lookup_rdap` |
 | `ct_subdomains` | `lookup_subdomains` |
+| `wayback_history` | `lookup_wayback` |
 
 Claims that come back through MCP have `found_by: "ai"`; their confidence is
 still set by the module's rules. To poke at the tools without Claude, the MCP
@@ -83,6 +84,7 @@ pytest
 | `osint/modules/crtsh.py` | Subdomains from crt.sh |
 | `osint/modules/asn.py` | Origin AS and routed prefix for an IP, via Team Cymru's DNS service |
 | `osint/modules/geoip.py` | Rough IP location from ipinfo.io |
+| `osint/modules/wayback.py` | Homepage snapshots per year from the Wayback Machine (CDX API) |
 | `osint/app.py` | FastAPI app: runs modules in parallel, renders the page |
 | `osint/mcp_server.py` | MCP server: the same modules as tools for Claude |
 
@@ -95,7 +97,7 @@ code in it, so the web app and the MCP server both call it unchanged.
 2. ~~Certificate transparency subdomains~~
 3. Image metadata (EXIF + map)
 4. Username check across sites
-5. Wayback Machine history
+5. ~~Wayback Machine history~~
 6. ~~IP / infrastructure lookups~~ (Shodan still to add)
 7. Pivot graph
 8. Case notebook (SQLite)

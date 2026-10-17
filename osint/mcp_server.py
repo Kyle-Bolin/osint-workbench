@@ -27,6 +27,7 @@ from osint.claims import Claim
 from osint.modules.crtsh import lookup_subdomains
 from osint.modules.dns_lookup import lookup_dns
 from osint.modules.rdap import lookup_rdap
+from osint.modules.wayback import lookup_wayback
 
 log = logging.getLogger(__name__)
 
@@ -106,6 +107,15 @@ def ct_subdomains(domain: str) -> LookupResult:
     every name that has appeared on a public TLS certificate. Can take up to
     30 seconds, and crt.sh is sometimes overloaded, so retry once on errors."""
     return run_lookup(lookup_subdomains, domain)
+
+
+@server.tool(annotations=READ_ONLY)
+def wayback_history(domain: str) -> LookupResult:
+    """Look up a domain's history in the Wayback Machine: the first archived
+    capture of its homepage in each year, with a link to view that snapshot.
+    Shows when a site first appeared, years it went dark, and how it changed.
+    The archive can be slow or busy, so retry once on errors."""
+    return run_lookup(lookup_wayback, domain)
 
 
 if __name__ == "__main__":

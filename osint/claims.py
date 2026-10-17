@@ -31,7 +31,7 @@ class Claim:
 # from a model guessing a number.
 BASE_CONFIDENCE = {
     "authoritative": 0.95,  # DNS answers, registry data
-    "log": 0.9,             # certificate transparency logs
+    "log": 0.9,             # certificate transparency logs, web archive captures
     "weak": 0.4,            # correlations like a matching username
     "inference": 0.3,       # anything without a direct source
 }

@@ -18,6 +18,10 @@
     th { color:var(--muted); font-weight:500; }
     .err { color:#c53030; }
     .muted { color:var(--muted); }
+    .timeline { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:12px; font-size:13px; }
+    .timeline a, .timeline span { padding:2px 8px; border-radius:4px; }
+    .timeline a { background:var(--accent); color:#fff; text-decoration:none; }
+    .timeline .gap { color:var(--muted); border:1px dashed var(--line); }
   </style>
 </head>
 <body>
@@ -32,6 +36,19 @@
     <section>
       <h2>{{ name }} <span class="muted">({{ mod.claims|length }})</span></h2>
       {% if mod.error %}<p class="err">{{ mod.error }}</p>{% endif %}
+      {% if name == "wayback" and mod.claims %}
+      {# One chip per archived year, linking to that year's snapshot. A dashed chip marks years with no capture. #}
+      <div class="timeline">
+        {%- for c in mod.claims %}
+        {%- set year = c.object[:4]|int %}
+        {%- set gap = year - loop.previtem.object[:4]|int - 1 if loop.previtem else 0 %}
+        {%- if gap %}
+        <span class="gap" title="no captures in these years">{{ gap }} yr gap</span>
+        {%- endif %}
+        <a href="{{ c.evidence_url }}" target="_blank" rel="noopener" title="{{ c.object }}">{{ year }}</a>
+        {%- endfor %}
+      </div>
+      {% endif %}
       {% if mod.claims %}
       <table>
         <tr><th>Predicate</th><th>Value</th><th>Confidence</th><th>Why</th></tr>

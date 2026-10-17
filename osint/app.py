@@ -12,13 +12,15 @@ from osint.modules.crtsh import lookup_subdomains
 from osint.modules.dns_lookup import lookup_dns, lookup_reverse_dns
 from osint.modules.geoip import lookup_geo
 from osint.modules.rdap import lookup_ip_rdap, lookup_rdap
+from osint.modules.wayback import lookup_wayback
 
 app = FastAPI(title="OSINT Workbench")
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
 DOMAIN_RE = re.compile(r"^(?=.{1,253}$)([a-z0-9-]{1,63}\.)+[a-z]{2,63}$")
 # Modules that take a domain, and modules that take an IP address.
-MODULES = {"dns": lookup_dns, "rdap": lookup_rdap, "subdomains": lookup_subdomains}
+MODULES = {"dns": lookup_dns, "rdap": lookup_rdap, "subdomains": lookup_subdomains,
+           "wayback": lookup_wayback}
 IP_MODULES = {"reverse_dns": lookup_reverse_dns, "asn": lookup_asn,
               "network": lookup_ip_rdap, "geo": lookup_geo}
 # Claims whose value is an IP: the page links them to an IP lookup (domain -> IP).
