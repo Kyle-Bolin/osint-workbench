@@ -29,7 +29,7 @@ rate limit. For more, make a free token at https://ipinfo.io/signup and
 ## Use it from Claude (MCP server)
 
 `osint/mcp_server.py` exposes each lookup as an MCP tool, so Claude Code or
-Claude Desktop can investigate a domain with this code. Claude starts the
+Claude Desktop can investigate a domain or IP with this code. Claude starts the
 server itself; you only register it once. Use full paths, because Claude may
 launch it from another folder.
 
@@ -57,11 +57,18 @@ Developer > Edit Config) and restart the app:
 On Windows the Python path is `.venv\Scripts\python.exe`. Then ask Claude
 something like "investigate example.com with the osint-workbench tools".
 
+To give the geolocation tool your ipinfo token, add `-e IPINFO_TOKEN=...` to
+the `claude mcp add` command, or put it in the `env` block of the Desktop config.
+
 | Tool | Module function |
 |---|---|
 | `dns_records` | `lookup_dns` |
 | `rdap_registration` | `lookup_rdap` |
 | `ct_subdomains` | `lookup_subdomains` |
+| `reverse_dns` | `lookup_reverse_dns` |
+| `ip_asn` | `lookup_asn` |
+| `ip_network` | `lookup_ip_rdap` |
+| `ip_geolocation` | `lookup_geo` |
 
 Claims that come back through MCP have `found_by: "ai"`; their confidence is
 still set by the module's rules. To poke at the tools without Claude, the MCP
