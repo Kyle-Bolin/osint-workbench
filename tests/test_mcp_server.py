@@ -37,6 +37,8 @@ def test_one_read_only_tool_per_module():
     assert set(tools) == {
         "dns_records", "rdap_registration", "ct_subdomains",
         "reverse_dns", "ip_asn", "ip_network", "ip_geolocation",
+        "bluesky_network", "github_network", "mastodon_network", "x_network",
+        "read_network_export",
     }
     for tool in tools.values():
         assert tool.annotations.read_only_hint
@@ -74,6 +76,28 @@ def test_ip_tools_take_a_public_ip(monkeypatch):
         assert message in result.content[0].text
 
 
+def test_network_tools_clean_the_handle_and_mark_claims_as_ai(monkeypatch):
+    def fake_mastodon(address):
+        return [Claim("mastodon:" + address, "follows", "mastodon:bob@mastodon.social", "mastodon", 0.95)]
+
+    monkeypatch.setattr(mcp_server, "lookup_mastodon_network", fake_mastodon)
+    result = call("mastodon_network", {"address": "@Kyle@infosec.exchange"})
+    assert not result.is_error
+    assert result.structured_content["target"] == "kyle@infosec.exchange"
+    assert result.structured_content["claims"][0]["found_by"] == "ai"
+
+    result = call("mastodon_network", {"address": "kyle"})
+    assert result.is_error
+    assert "Not a Mastodon address" in result.content[0].text
+
+
+def test_x_tool_without_a_key_says_so_and_spends_nothing(monkeypatch):
+    monkeypatch.delenv("X_BEARER_TOKEN", raising=False)
+    result = call("x_network", {"username": "kyle_b"})
+    assert result.is_error
+    assert "X_BEARER_TOKEN" in result.content[0].text
+
+
 def test_bad_input_and_upstream_failures_come_back_as_readable_errors(monkeypatch):
     result = call("dns_records", {"domain": "not a domain"})
     assert result.is_error
@@ -97,4 +121,6 @@ def test_server_starts_over_stdio():
     assert {t.name for t in list_tools(params)} == {
         "dns_records", "rdap_registration", "ct_subdomains",
         "reverse_dns", "ip_asn", "ip_network", "ip_geolocation",
+        "bluesky_network", "github_network", "mastodon_network", "x_network",
+        "read_network_export",
     }
