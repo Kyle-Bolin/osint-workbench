@@ -61,9 +61,9 @@ case notebook).
 ## Use it from Claude (MCP server)
 
 `osint/mcp_server.py` exposes each lookup as an MCP tool, so Claude Code or
-Claude Desktop can investigate a domain with this code. Claude starts the
-server itself; you only register it once. Use full paths, because Claude may
-launch it from another folder.
+Claude Desktop can investigate a domain, an IP or your own social accounts with
+this code. Claude starts the server itself; you only register it once. Use full
+paths, because Claude may launch it from another folder.
 
 **Claude Code**, from the repo root with the venv set up:
 
@@ -89,11 +89,18 @@ Developer > Edit Config) and restart the app:
 On Windows the Python path is `.venv\Scripts\python.exe`. Then ask Claude
 something like "investigate example.com with the osint-workbench tools".
 
+To give the geolocation tool your ipinfo token, add `-e IPINFO_TOKEN=...` to
+the `claude mcp add` command, or put it in the `env` block of the Desktop config.
+
 | Tool | Module function |
 |---|---|
 | `dns_records` | `lookup_dns` |
 | `rdap_registration` | `lookup_rdap` |
 | `ct_subdomains` | `lookup_subdomains` |
+| `reverse_dns` | `lookup_reverse_dns` |
+| `ip_asn` | `lookup_asn` |
+| `ip_network` | `lookup_ip_rdap` |
+| `ip_geolocation` | `lookup_geo` |
 | `bluesky_network` | `lookup_bluesky_network` |
 | `github_network` | `lookup_github_network` |
 | `mastodon_network` | `lookup_mastodon_network` |

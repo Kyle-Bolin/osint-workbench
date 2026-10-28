@@ -12,6 +12,7 @@ becomes the output schema.
 Run it: python -m osint.mcp_server   (see "Use it from Claude" in the README)
 """
 import csv
+import ipaddress
 import json
 import logging
 import re
@@ -28,13 +29,15 @@ from mcp.types import ToolAnnotations
 
 from osint import accounts
 from osint.claims import Claim
+from osint.modules.asn import lookup_asn
 from osint.modules.bluesky import lookup_bluesky_network
 from osint.modules.crtsh import lookup_subdomains
-from osint.modules.dns_lookup import lookup_dns
+from osint.modules.dns_lookup import lookup_dns, lookup_reverse_dns
 from osint.modules.exports import read_exports
+from osint.modules.geoip import lookup_geo
 from osint.modules.github import lookup_github_network
 from osint.modules.mastodon import lookup_mastodon_network
-from osint.modules.rdap import lookup_rdap
+from osint.modules.rdap import lookup_ip_rdap, lookup_rdap
 from osint.modules.x_api import MissingAPIKey, lookup_x_network
 
 log = logging.getLogger(__name__)
@@ -44,8 +47,9 @@ INSTRUCTIONS = """\
 Lookups from a personal OSINT workbench. Every tool returns claims
 (subject -predicate-> object), each with a source, a rationale and a
 confidence score set by the workbench's own rules. Explain a score if it
-helps, but never invent or change one. Only investigate the owner's own
-domains, CTF targets, and bug-bounty programs that allow recon.
+helps, but never invent or change one. Domain tools take a domain; IP tools
+take a public IP, such as an address dns_records found. Only investigate the
+owner's own domains, CTF targets, and bug-bounty programs that allow recon.
 
 The *_network tools map a social account's follows and followers. Only run
 them on the owner's own accounts (or an organisation or CTF account), never
@@ -61,9 +65,9 @@ server = MCPServer("osint-workbench", instructions=INSTRUCTIONS)
 # auto-approve, but they do reach out to the internet.
 READ_ONLY = ToolAnnotations(read_only_hint=True, open_world_hint=True)
 
-# Same rules as clean_domain in osint/app.py. Kept here so the MCP server
-# doesn't import the web app; the two can share one helper once the app
-# routes by input type (IP lookups, usernames).
+# Same rules as clean_domain and clean_target in osint/app.py. Kept here so
+# the MCP server doesn't import the web app; they could move into a shared
+# module like osint/accounts.py, which already does this for handles.
 DOMAIN_RE = re.compile(r"^(?=.{1,253}$)([a-z0-9-]{1,63}\.)+[a-z]{2,63}$")
 
 # Failures we expect from upstream services (timeouts, HTTP errors, a garbled
@@ -84,6 +88,16 @@ def clean_domain(raw: str) -> str:
     if not DOMAIN_RE.match(domain):
         raise ToolError(f"Not a valid domain: {raw!r}")
     return domain
+
+
+def clean_ip(raw: str) -> str:
+    try:
+        ip = ipaddress.ip_address(raw.strip())
+    except ValueError:
+        raise ToolError(f"Not a valid IP address: {raw!r}") from None
+    if not ip.is_global:  # 192.168.x.x, 10.x.x.x, ::1 and friends
+        raise ToolError(f"{ip} is a private or reserved address; public lookups can't see it")
+    return str(ip)
 
 
 def handle_cleaner(clean: Callable[[str], str]) -> Callable[[str], str]:
@@ -134,6 +148,39 @@ def ct_subdomains(domain: str) -> LookupResult:
     every name that has appeared on a public TLS certificate. Can take up to
     30 seconds, and crt.sh is sometimes overloaded, so retry once on errors."""
     return run_lookup(lookup_subdomains, domain)
+
+
+@server.tool(annotations=READ_ONLY)
+def reverse_dns(ip: str) -> LookupResult:
+    """Look up an IP address's reverse DNS (PTR record): the hostname the
+    IP's owner gave it, which often names the hosting company or service.
+    A hint, not proof, since nothing checks it. Fast."""
+    return run_lookup(lookup_reverse_dns, ip, clean_ip)
+
+
+@server.tool(annotations=READ_ONLY)
+def ip_asn(ip: str) -> LookupResult:
+    """Find which network announces an IP address: its origin AS number and
+    name (like AS15169 GOOGLE) and the routed prefix, from BGP data via
+    Team Cymru. Fast. Usually names the hosting provider or CDN."""
+    return run_lookup(lookup_asn, ip, clean_ip)
+
+
+@server.tool(annotations=READ_ONLY)
+def ip_network(ip: str) -> LookupResult:
+    """Look up who an IP address's block is registered to, via RDAP at the
+    regional registry (ARIN, RIPE, ...): network name, owner, address range,
+    country and abuse contact. An independent check on ip_asn."""
+    return run_lookup(lookup_ip_rdap, ip, clean_ip)
+
+
+@server.tool(annotations=READ_ONLY)
+def ip_geolocation(ip: str) -> LookupResult:
+    """Estimate where an IP address is (country, city, coordinates) from
+    ipinfo.io. It's a commercial database's guess: the country is usually
+    right, the city often isn't, and anycast IPs have no single location,
+    so these claims start at a low confidence. Rate-limited without a token."""
+    return run_lookup(lookup_geo, ip, clean_ip)
 
 
 @server.tool(annotations=READ_ONLY)

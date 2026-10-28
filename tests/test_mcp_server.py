@@ -36,6 +36,7 @@ def test_one_read_only_tool_per_module():
     tools = {t.name: t for t in list_tools(mcp_server.server)}
     assert set(tools) == {
         "dns_records", "rdap_registration", "ct_subdomains",
+        "reverse_dns", "ip_asn", "ip_network", "ip_geolocation",
         "bluesky_network", "github_network", "mastodon_network", "x_network",
         "read_network_export",
     }
@@ -56,6 +57,23 @@ def test_tool_returns_claims_found_by_ai_with_rule_based_confidence(monkeypatch)
     assert claim["object"] == "93.184.216.34"
     assert claim["found_by"] == "ai"
     assert claim["confidence"] == 0.95
+
+
+def test_ip_tools_take_a_public_ip(monkeypatch):
+    def fake_asn(ip):
+        return [Claim(ip, "announced_by", "AS15169", "team-cymru", 0.95)]
+
+    monkeypatch.setattr(mcp_server, "lookup_asn", fake_asn)
+    result = call("ip_asn", {"ip": " 8.8.8.8 "})
+    assert not result.is_error
+    assert result.structured_content["target"] == "8.8.8.8"
+    assert result.structured_content["claims"][0]["found_by"] == "ai"
+
+    # A domain, or an address only the local network can see, is refused before any lookup runs.
+    for bad, message in [("example.com", "Not a valid IP address"), ("192.168.1.1", "private or reserved")]:
+        result = call("ip_asn", {"ip": bad})
+        assert result.is_error
+        assert message in result.content[0].text
 
 
 def test_network_tools_clean_the_handle_and_mark_claims_as_ai(monkeypatch):
@@ -102,6 +120,7 @@ def test_server_starts_over_stdio():
     )
     assert {t.name for t in list_tools(params)} == {
         "dns_records", "rdap_registration", "ct_subdomains",
+        "reverse_dns", "ip_asn", "ip_network", "ip_geolocation",
         "bluesky_network", "github_network", "mastodon_network", "x_network",
         "read_network_export",
     }
